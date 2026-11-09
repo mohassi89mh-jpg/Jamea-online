@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>مخطط البئر</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0f1e; --card:#131c33; --card2:#18233f; --line:rgba(255,255,255,.08);
+    --text:#e8edf8; --muted:#8b97b5; --a1:#22d3ee; --a2:#6366f1; --a3:#a855f7;
+    --ok:#10b981; --bad:#f43f5e; --warn:#f59e0b; --r:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{padding:16px;background:var(--bg);color:var(--text);font-family:'Cairo',system-ui,sans-serif;font-size:14px;min-height:100vh}
+  header{max-width:1400px;margin:0 auto 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+  h1{margin:0;font-size:clamp(20px,3vw,28px);font-weight:800;background:linear-gradient(90deg,#fff,#c7d2fe 60%,var(--a1));-webkit-background-clip:text;background-clip:text;color:transparent}
+  h2{margin:0 0 10px;font-size:15px;color:#c7d2fe}
+  .muted{color:var(--muted);font-size:12px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px}
+  .btn{border:0;cursor:pointer;font-family:inherit;font-weight:700;font-size:13px;color:#fff;padding:9px 14px;border-radius:10px;background:linear-gradient(135deg,var(--a2),var(--a3))}
+  .btn.ghost{background:var(--card2);border:1px solid var(--line);color:var(--text)}
+  .btn.small{padding:5px 10px;font-size:12px;margin-top:8px}
+  .layout{max-width:1400px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:16px;align-items:start}
+  @media (max-width:960px){.layout{grid-template-columns:1fr}}
+  .stack{display:flex;flex-direction:column;gap:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+  input{width:100%;background:var(--card2);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-family:inherit;font-size:14px;direction:ltr;text-align:left;min-width:0}
+  input[data-text]{direction:rtl;text-align:right}
+  input:focus{outline:2px solid var(--a2)}
+  table{width:100%;border-collapse:collapse}
+  th{font-size:11px;color:var(--muted);font-weight:600;text-align:right;padding:0 4px 6px}
+  td{padding:3px 2px}
+  td input{padding:6px 7px}
+  .x{background:none;border:1px solid var(--line);color:var(--bad);border-radius:6px;cursor:pointer;padding:4px 8px}
+  .issues{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+  .issues li{padding:8px 10px;border-radius:10px;font-size:13px;background:var(--card2);border-right:3px solid var(--line)}
+  .issues li.err{border-right-color:var(--bad)}
+  .issues li.warn{border-right-color:var(--warn)}
+  .issues li.ok{border-right-color:var(--ok)}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .metric{background:var(--card2);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+  .metric b{font-size:18px;direction:ltr;text-align:right}
+  svg{width:100%;height:auto;display:block;border-radius:12px;direction:ltr}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:10px}
+  .sw{display:inline-block;width:12px;height:12px;border-radius:3px;margin-left:5px;vertical-align:-2px}
+  @media print{
+    body{background:#fff;color:#000;padding:0}
+    .no-print{display:none!important}
+    .layout{display:block}
+    .card{border:0;padding:0;background:none}
+  }
+</style>
+</head>
+<body>
+
+<header class="no-print">
+  <div>
+    <h1>مخطط البئر — Well Schematic</h1>
+    <div class="muted">مدخلات بالوحدات الحقلية (ft / in) · جميع الأعماق MD من أرضية الحفر (KB)</div>
+  </div>
+  <div class="toolbar">
+    <button class="btn ghost" data-act="sample">بيانات مثال</button>
+    <button class="btn ghost" data-act="blank">بئر جديد</button>
+    <button class="btn ghost" data-act="open">فتح JSON</button>
+    <button class="btn ghost" data-act="save">حفظ JSON</button>
+    <button class="btn ghost" data-act="svg">تصدير SVG</button>
+    <button class="btn" data-act="print">طباعة</button>
+  </div>
+  <input type="file" id="file" accept="application/json,.json" hidden>
+</header>
+
+<div class="layout">
+
+  <div class="stack no-print">
+
+    <section class="card">
+      <h2>بيانات البئر</h2>
+      <div class="grid">
+        <div><label>اسم البئر</label><input data-text data-path="well.name"></div>
+        <div><label>الحقل</label><input data-text data-path="well.field"></div>
+        <div><label>ارتفاع KB (ft)</label><input inputmode="decimal" data-path="well.kb"></div>
+        <div><label>عمق الحفرة TD (ft)</label><input inputmode="decimal" data-path="well.td"></div>
+        <div><label>PBTD (ft)</label><input inputmode="decimal" data-path="well.pbtd"></div>
+        <div><label>مستوى السائل (ft)</label><input inputmode="decimal" data-path="well.fluid"></div>
+        <div style="grid-column:1/-1"><label>الرأس / Wellhead</label><input data-text data-path="well.tree"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>الأغلفة Casing</h2>
+      <div id="list-casings"></div>
+      <button class="btn ghost small" data-add="casings">+ إضافة غلاف</button>
+      <div class="muted" style="margin-top:6px">رتّبها بأي ترتيب؛ البرنامج يرتبها تلقائياً من الأكبر OD إلى الأصغر.</div>
+    </section>
+
+    <section class="card">
+      <h2>الأنبوب Tubing و Packer</h2>
+      <div class="grid">
+        <div><label>OD (in)</label><input inputmode="decimal" data-path="tubing.od"></div>
+        <div><label>ID (in)</label><input inputmode="decimal" data-path="tubing.id"></div>
+        <div><label>عمق قاع الأنبوب (ft)</label><input inputmode="decimal" data-path="tubing.depth"></div>
+        <div><label>عمق Packer (ft)</label><input inputmode="decimal" data-path="tubing.packer"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>الفتحات Perforations</h2>
+      <div id="list-perfs"></div>
+      <button class="btn ghost small" data-add="perfs">+ إضافة فتحات</button>
+    </section>
+
+    <section class="card">
+      <h2>التكوينات Formation Tops</h2>
+      <div id="list-tops"></div>
+      <button class="btn ghost small" data-add="tops">+ إضافة تكوين</button>
+    </section>
+
+    <section class="card">
+      <h2>الفحوصات Checks</h2>
+      <ul id="issues" class="issues"></ul>
+    </section>
+
+    <section class="card">
+      <h2>الحسابات التقريبية</h2>
+      <div id="metrics" class="metrics"></div>
+    </section>
+
+  </div>
+
+  <section class="card">
+    <svg id="svg" viewBox="0 0 660 1070" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Well schematic"></svg>
+    <div class="legend">
+      <span><i class="sw" style="background:#e2e8f0"></i>Casing</span>
+      <span><i class="sw" style="background:repeating-linear-gradient(45deg,#57534e,#57534e 3px,#d6d3d1 3px,#d6d3d1 5px)"></i>Cement</span>
+      <span><i class="sw" style="background:#22d3ee"></i>Tubing</span>
+      <span><i class="sw" style="background:#f59e0b"></i>Packer</span>
+      <span><i class="sw" style="background:#ef4444"></i>Perforations</span>
+      <span><i class="sw" style="background:#3b82f6"></i>Fluid level</span>
+    </div>
+  </section>
+
+</div>
+
+<script>
+/* ===================== Data model ===================== */
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = n => (n == null || !isFinite(n)) ? '—' : Number(n).toLocaleString('en-US', {maximumFractionDigits: 2});
+const num = v => { const n = parseFloat(String(v).replace(/,/g, '')); return isFinite(n) ? n : null; };
+const getPath = (o, p) => p.split('.').reduce((a, k) => a?.[k], o);
+const setPath = (o, p, v) => { const k = p.split('.'); let t = o; for (let i = 0; i < k.length - 1; i++) t = t[k[i]]; t[k[k.length - 1]] = v; };
+
+const blankState = () => ({
+  well: {name:'', field:'', kb:null, td:null, pbtd:null, fluid:null, tree:''},
+  casings: [],
+  tubing: {od:null, id:null, depth:null, packer:null},
+  perfs: [],
+  tops: []
+});
+
+// بيانات مثال توضيحية فقط — ليست بيانات بئر حقيقية
+function sample(){
+  return {
+    well: {name:'WELL-01', field:'Field A', kb:25, td:9450, pbtd:9300, fluid:4000, tree:'Tree 7-1/16" 5K'},
+    casings: [
+      {name:'Conductor',    od:20,     id:19.124, shoe:120,  cmt:0},
+      {name:'Surface',      od:13.375, id:12.415, shoe:1500, cmt:0},
+      {name:'Intermediate', od:9.625,  id:8.681,  shoe:5200, cmt:3800},
+      {name:'Production',   od:7,      id:6.184,  shoe:9400, cmt:4800}
+    ],
+    tubing: {od:2.875, id:2.441, depth:8840, packer:8850},
+    perfs: [{top:9050, bot:9150, spf:4}],
+    tops: [{name:'Formation A', depth:3000}, {name:'Formation B', depth:7200}, {name:'Reservoir X', depth:9000}]
+  };
+}
+
+let S = sample();
+
+const LISTS = {
+  casings: [['name','الاسم',true],['od','OD (in)'],['id','ID (in)'],['shoe','القاع (ft)'],['cmt','أعلى السمنت (ft)']],
+  perfs:   [['top','من (ft)'],['bot','إلى (ft)'],['spf','SPF']],
+  tops:    [['name','التكوين',true],['depth','العمق (ft)']]
+};
+const newRow = key => key === 'casings' ? {name:'', od:null, id:null, shoe:null, cmt:null}
+                   : key === 'perfs'   ? {top:null, bot:null, spf:null}
+                   :                     {name:'', depth:null};
+
+/* Casings with complete data, sorted from largest OD (outermost) to smallest (innermost) */
+const sortedCasings = () => S.casings.filter(c => c.od > 0 && c.id > 0 && c.shoe > 0).sort((a, b) => b.od - a.od);
+
+/* Innermost casing that covers depth d (its shoe is at or below d) */
+function coverAt(d){
+  if (!(d > 0)) return null;
+  const C = sortedCasings();
+  for (let i = C.length - 1; i >= 0; i--) if (C[i].shoe >= d) return C[i];
+  return null;
+}
+
+/* ===================== Checks & calculations ===================== */
+function analyze(){
+  const iss = [];
+  const add = (lvl, m) => iss.push({lvl, m});
+  const W = S.well, T = S.tubing, C = sortedCasings();
+
+  S.casings.forEach((c, i) => {
+    if (!(c.od > 0 && c.id > 0 && c.shoe > 0)) add('warn', `الغلاف ${i+1} (${c.name || 'بدون اسم'}): بيانات ناقصة`);
+  });
+
+  if (!(W.td > 0)) add('err', 'أدخل عمق الحفرة TD');
+  if (W.pbtd > 0 && W.td > 0 && W.pbtd > W.td) add('err', 'PBTD أكبر من TD');
+
+  C.forEach(c => {
+    if (c.id >= c.od) add('err', `${c.name}: ID يجب أن يكون أصغر من OD`);
+    if (W.td > 0 && c.shoe > W.td) add('err', `${c.name}: القاع أعمق من TD`);
+    if (c.cmt != null && c.cmt > c.shoe) add('err', `${c.name}: أعلى السمنت أعمق من القاع`);
+    if (c.cmt == null) add('warn', `${c.name}: لم يُحدد أعلى السمنت`);
+  });
+
+  for (let i = 1; i < C.length; i++){
+    const o = C[i-1], n = C[i];
+    if (n.od >= o.id) add('err', `${n.name} (OD ${n.od}") لا يدخل داخل ${o.name} (ID ${o.id}")`);
+    if (n.shoe < o.shoe) add('warn', `ترتيب القيعان غير متوقع: ${n.name} أضحل من ${o.name}`);
+  }
+
+  if (T.od > 0 && T.id > 0 && T.id >= T.od) add('err', 'ID الأنبوب يجب أن يكون أصغر من OD');
+  if (T.depth > 0){
+    const cv = coverAt(T.depth);
+    if (!cv) add('err', 'عمق الأنبوب لا يقع داخل أي غلاف');
+    else if (T.od > 0 && T.od >= cv.id) add('err', `الأنبوب ${T.od}" لا يدخل داخل ${cv.name} (ID ${cv.id}")`);
+    if (W.pbtd > 0 && T.depth > W.pbtd) add('warn', 'قاع الأنبوب أسفل PBTD');
+  }
+  if (T.packer > 0 && T.depth > 0 && T.packer < T.depth) add('warn', 'الـ Packer أعلى من قاع الأنبوب');
+
+  S.perfs.forEach((p, i) => {
+    const L = `الفتحات ${i+1}`;
+    if (!(p.top > 0 && p.bot > 0)) { add('warn', `${L}: بيانات ناقصة`); return; }
+    if (p.top >= p.bot) { add('err', `${L}: العمق العلوي أكبر من أو يساوي السفلي`); return; }
+    const cv = coverAt(p.bot);
+    if (!cv) add('err', `${L}: تقع أسفل كل الأغلفة`);
+    else if (cv.cmt != null && cv.cmt > p.top) add('warn', `${L}: أعلى سمنت ${cv.name} (${fmt(cv.cmt)} ft) أعمق من الفتحات — تحقق من العزل`);
+    if (W.pbtd > 0 && p.bot > W.pbtd) add('warn', `${L}: أسفل PBTD`);
+    if (T.packer > 0 && p.top < T.packer) add('warn', `${L}: أعلى من الـ Packer`);
+  });
+
+  S.tops.forEach(t => { if (t.depth > 0 && W.td > 0 && t.depth > W.td) add('warn', `${t.name || 'تكوين'}: أعمق من TD`); });
+
+  if (!iss.some(i => i.lvl === 'err')) add('ok', 'لا توجد أخطاء هيكلية في الإدخال');
+
+  const calc = {count: C.length};
+  calc.deepest = C.length ? Math.max(...C.map(c => c.shoe)) : null;
+  calc.oh = (W.td > 0 && calc.deepest) ? W.td - calc.deepest : null;
+  if (T.depth > 0 && T.id > 0) calc.tubCap = T.id * T.id / 1029.4 * T.depth;
+  const cvT = T.depth > 0 ? coverAt(T.depth) : null;
+  if (cvT && T.od > 0) calc.annCap = (cvT.id * cvT.id - T.od * T.od) / 1029.4 * T.depth;
+  calc.perfLen = S.perfs.reduce((a, p) => a + (p.bot > p.top ? p.bot - p.top : 0), 0);
+  calc.shots = S.perfs.reduce((a, p) => a + (p.bot > p.top && p.spf > 0 ? (p.bot - p.top) * p.spf : 0), 0);
+  return {iss, calc};
+}
+
+/* ===================== Rendering: forms ===================== */
+function renderLists(){
+  for (const key in LISTS){
+    const cols = LISTS[key];
+    let h = '<table><thead><tr>' + cols.map(c => `<th>${c[1]}</th>`).join('') + '<th></th></tr></thead><tbody>';
+    S[key].forEach((r, i) => {
+      h += '<tr>' + cols.map(c => {
+        const text = c[2] ? ' data-text' : '';
+        return `<td><input${text} inputmode="${c[2] ? 'text' : 'decimal'}" data-list="${key}" data-i="${i}" data-f="${c[0]}" value="${esc(r[c[0]] ?? '')}"></td>`;
+      }).join('') + `<td><button class="x" data-del="${key}" data-i="${i}" aria-label="حذف">✕</button></td></tr>`;
+    });
+    h += '</tbody></table>';
+    if (!S[key].length) h = '<div class="muted">لا توجد صفوف بعد</div>';
+    $('#list-' + key).innerHTML = h;
+  }
+}
+
+function fillAll(){
+  document.querySelectorAll('[data-path]').forEach(el => { el.value = getPath(S, el.dataset.path) ?? ''; });
+  renderLists();
+  update();
+}
+
+function renderIssues(iss){
+  const icon = {err:'⛔', warn:'⚠️', ok:'✅'};
+  $('#issues').innerHTML = iss.map(i => `<li class="${i.lvl}">${icon[i.lvl]} ${esc(i.m)}</li>`).join('');
+}
+
+function renderMetrics(calc){
+  const M = [
+    ['عدد الأغلفة', calc.count],
+    ['أعمق قاع (ft)', fmt(calc.deepest)],
+    ['حفرة مكشوفة (ft)', fmt(calc.oh)],
+    ['سعة الأنبوب (bbl)', calc.tubCap != null ? calc.tubCap.toFixed(1) : '—'],
+    ['سعة الحلقة أنبوب/غلاف (bbl)', calc.annCap != null ? calc.annCap.toFixed(1) : '—'],
+    ['طول الفتحات (ft)', fmt(calc.perfLen)],
+    ['عدد الطلقات التقريبي', fmt(calc.shots)]
+  ];
+  $('#metrics').innerHTML = M.map(([a, b]) => `<div class="metric"><span class="muted">${a}</span><b>${b}</b></div>`).join('');
+}
+
+/* ===================== Rendering: schematic ===================== */
+function niceStep(v){
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  const m = v / p;
+  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
+}
+const lbl = (x, y, t, col = '#e8edf8', anchor = 'start', size = 12) =>
+  `<text x="${x}" y="${y}" fill="${col}" font-size="${size}" text-anchor="${anchor}" font-family="Cairo, sans-serif">${esc(t)}</text>`;
+
+function draw(){
+  const W = S.well, T = S.tubing, C = sortedCasings();
+  const pts = [W.td, W.pbtd, T.depth, T.packer, W.fluid, ...C.map(c => c.shoe), ...S.perfs.map(p => p.bot), ...S.tops.map(t => t.depth)].filter(v => v > 0);
+  const D = Math.max(...pts, 1000) * 1.03;
+  const TOP = 110, BOT = 1000, CX = 330, VW = 660, VH = 1070;
+  const y = d => TOP + (d / D) * (BOT - TOP);
+  const maxOD = Math.max(1, ...C.map(c => c.od), T.od || 0);
+  const sx = 150 / maxOD;             // px per inch
+  const R = v => (v || 0) * sx / 2;   // radius in px for a diameter in inches
+  const holeD = od => od * 1.2;       // assumed open-hole diameter
+  const deepest = C.reduce((a, c) => (!a || c.shoe > a.shoe) ? c : a, null);
+
+  let g = `<defs><pattern id="cem" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+    <rect width="6" height="6" fill="#57534e" opacity=".5"/><line x1="0" y1="0" x2="0" y2="6" stroke="#d6d3d1" stroke-width="2"/></pattern></defs>`;
+  g += `<rect width="${VW}" height="${VH}" fill="#0b1224" rx="12"/>`;
+
+  // Header
+  g += lbl(24, 36, W.name || 'WELL', '#ffffff', 'start', 18);
+  g += lbl(24, 58, `${W.field || ''}   KB ${fmt(W.kb)} ft   TD ${fmt(W.td)} ft`, '#8b97b5', 'start', 12);
+
+  // Depth ruler
+  g += `<line x1="64" y1="${TOP}" x2="64" y2="${BOT}" stroke="#475569"/>`;
+  const step = niceStep(D / 12);
+  for (let d = 0; d <= D; d += step){
+    g += `<line x1="60" y1="${y(d)}" x2="64" y2="${y(d)}" stroke="#475569"/>` + lbl(56, y(d) + 4, fmt(d), '#8b97b5', 'end', 11);
+  }
+
+  // Ground level and tree
+  g += `<line x1="70" y1="${TOP}" x2="640" y2="${TOP}" stroke="#78716c" stroke-dasharray="2 3"/>`;
+  g += `<rect x="${CX - 25}" y="${TOP - 30}" width="50" height="30" fill="#334155" rx="3"/>`;
+  g += lbl(430, TOP - 12, W.tree || 'Wellhead', '#94a3b8', 'start', 11);
+
+  // Formation tops (drawn first, casings sit on top)
+  S.tops.forEach(t => {
+    if (!(t.depth > 0)) return;
+    const yy = y(t.depth);
+    g += `<line x1="70" y1="${yy}" x2="640" y2="${yy}" stroke="#a78bfa" stroke-opacity=".5" stroke-dasharray="2 4"/>`;
+    g += lbl(74, yy - 4, `${t.name || 'Top'} · ${fmt(t.depth)}`, '#c4b5fd', 'start', 11);
+  });
+
+  // Open hole below deepest shoe
+  if (deepest && W.td > deepest.shoe){
+    g += `<rect x="${CX - R(holeD(deepest.od))}" y="${y(deepest.shoe)}" width="${R(holeD(deepest.od)) * 2}" height="${y(W.td) - y(deepest.shoe)}" fill="none" stroke="#64748b" stroke-dasharray="4 3"/>`;
+  }
+
+  // Cement in annuli (between each casing OD and the ID of the next outer string / hole)
+  C.forEach((c, i) => {
+    if (c.cmt == null || !(c.cmt < c.shoe)) return;
+    const outerID = i === 0 ? holeD(c.od) : C[i-1].id;
+    const w = Math.max(0, R(outerID) - R(c.od));
+    const y1 = y(Math.max(0, c.cmt)), y2 = y(c.shoe);
+    g += `<rect x="${CX - R(outerID)}" y="${y1}" width="${w}" height="${y2 - y1}" fill="url(#cem)"/>`;
+    g += `<rect x="${CX + R(c.od)}" y="${y1}" width="${w}" height="${y2 - y1}" fill="url(#cem)"/>`;
+  });
+
+  // Casings (outer to inner)
+  const colors = ['#e2e8f0', '#94a3b8', '#cbd5e1', '#7dd3fc', '#fca5a5'];
+  C.forEach((c, i) => {
+    const col = colors[i % colors.length];
+    const yS = y(c.shoe);
+    const wall = Math.max(2, R(c.od) - R(c.id));
+    g += `<rect x="${CX - R(c.od)}" y="${TOP}" width="${wall}" height="${yS - TOP}" fill="${col}"/>`;
+    g += `<rect x="${CX + R(c.od) - wall}" y="${TOP}" width="${wall}" height="${yS - TOP}" fill="${col}"/>`;
+    g += `<rect x="${CX - R(c.od)}" y="${yS - 3}" width="${R(c.od) * 2}" height="3" fill="${col}"/>`; // shoe
+    addLabel(y(c.shoe), `${c.name || 'Casing'} ${c.od}" @ ${fmt(c.shoe)} ft`, col);
+  });
+
+  // Tubing
+  if (T.od > 0 && T.depth > 0){
+    const tw = Math.max(1.5, R(T.od) - R(T.id > 0 ? T.id : T.od * 0.85));
+    const yT = y(T.depth);
+    g += `<rect x="${CX - R(T.od)}" y="${TOP}" width="${tw}" height="${yT - TOP}" fill="#22d3ee"/>`;
+    g += `<rect x="${CX + R(T.od) - tw}" y="${TOP}" width="${tw}" height="${yT - TOP}" fill="#22d3ee"/>`;
+    g += `<rect x="${CX - R(T.od)}" y="${yT - 2}" width="${R(T.od) * 2}" height="2" fill="#22d3ee"/>`;
+    let txt = `Tubing ${T.od}" @ ${fmt(T.depth)} ft`;
+    // Packer
+    const cv = coverAt(T.depth);
+    if (T.packer > 0 && cv){
+      const yP = y(T.packer);
+      const pw = Math.max(0, R(cv.id) - R(T.od));
+      g += `<rect x="${CX - R(cv.id)}" y="${yP - 4}" width="${pw}" height="8" fill="#f59e0b"/>`;
+      g += `<rect x="${CX + R(T.od)}" y="${yP - 4}" width="${pw}" height="8" fill="#f59e0b"/>`;
+      txt += ` · Pkr @ ${fmt(T.packer)} ft`;
+    }
+    addLabel(yT, txt, '#22d3ee');
+  }
+
+  // Perforations
+  S.perfs.forEach(p => {
+    if (!(p.top > 0 && p.bot > p.top)) return;
+    const cv = coverAt(p.bot);
+    if (cv){
+      for (let yy = y(p.top); yy <= y(p.bot); yy += 5){
+        g += `<line x1="${CX - R(cv.od)}" y1="${yy}" x2="${CX - R(cv.id)}" y2="${yy + 3}" stroke="#ef4444" stroke-width="1.6"/>`;
+        g += `<line x1="${CX + R(cv.id)}" y1="${yy}" x2="${CX + R(cv.od)}" y2="${yy + 3}" stroke="#ef4444" stroke-width="1.6"/>`;
+      }
+    }
+    addLabel((y(p.top) + y(p.bot)) / 2, `Perfs ${fmt(p.top)}–${fmt(p.bot)} ft${p.spf ? ' · ' + p.spf + ' SPF' : ''}`, '#f87171');
+  });
+
+  // PBTD
+  if (W.pbtd > 0){
+    const cv = coverAt(W.pbtd);
+    const half = cv ? R(cv.id) : 20;
+    g += `<line x1="${CX - half}" y1="${y(W.pbtd)}" x2="${CX + half}" y2="${y(W.pbtd)}" stroke="#cbd5e1" stroke-dasharray="5 3"/>`;
+    addLabel(y(W.pbtd), `PBTD ${fmt(W.pbtd)} ft`, '#cbd5e1');
+  }
+
+  // TD
+  if (W.td > 0){
+    const half = deepest ? R(holeD(deepest.od)) : 20;
+    g += `<line x1="${CX - half}" y1="${y(W.td)}" x2="${CX + half}" y2="${y(W.td)}" stroke="#94a3b8" stroke-width="2"/>`;
+    addLabel(y(W.td), `TD ${fmt(W.td)} ft`, '#94a3b8');
+  }
+
+  // Fluid level (in annulus between tubing and casing)
+  if (W.fluid > 0 && T.od > 0){
+    const cv = coverAt(W.fluid);
+    if (cv){
+      const yF = y(W.fluid);
+      g += `<line x1="${CX - R(cv.id) + 2}" y1="${yF}" x2="${CX - R(T.od) - 2}" y2="${yF}" stroke="#3b82f6" stroke-width="2.5" stroke-dasharray="6 3"/>`;
+      g += `<line x1="${CX + R(T.od) + 2}" y1="${yF}" x2="${CX + R(cv.id) - 2}" y2="${yF}" stroke="#3b82f6" stroke-width="2.5" stroke-dasharray="6 3"/>`;
+      addLabel(yF, `Fluid level ${fmt(W.fluid)} ft`, '#60a5fa');
+    }
+  }
+
+  // Right-side labels, spaced so they do not overlap
+  pendingLabels.sort((a, b) => a.y - b.y);
+  for (let i = 1; i < pendingLabels.length; i++){
+    if (pendingLabels[i].y < pendingLabels[i-1].y + 14) pendingLabels[i].y = pendingLabels[i-1].y + 14;
+  }
+  pendingLabels.forEach(o => { g += lbl(430, o.y + 4, o.t, o.c); });
+  pendingLabels.length = 0;
+
+  $('#svg').innerHTML = g;
+}
+
+const pendingLabels = [];
+function addLabel(y, t, c){ pendingLabels.push({y, t, c}); }
+
+/* ===================== Update loop ===================== */
+function update(){
+  const {iss, calc} = analyze();
+  renderIssues(iss);
+  renderMetrics(calc);
+  draw();
+}
+
+/* ===================== Events ===================== */
+document.addEventListener('input', e => {
+  const t = e.target;
+  const v = t.hasAttribute('data-text') ? t.value : num(t.value);
+  if (t.dataset.path) setPath(S, t.dataset.path, v);
+  else if (t.dataset.list) S[t.dataset.list][+t.dataset.i][t.dataset.f] = v;
+  else return;
+  update();
+});
+
+function download(name, content, type){
+  const url = URL.createObjectURL(new Blob([content], {type}));
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  if (b.dataset.add){ S[b.dataset.add].push(newRow(b.dataset.add)); renderLists(); update(); return; }
+  if (b.dataset.del){ S[b.dataset.del].splice(+b.dataset.i, 1); renderLists(); update(); return; }
+  switch (b.dataset.act){
+    case 'sample': S = sample(); fillAll(); break;
+    case 'blank':  S = blankState(); fillAll(); break;
+    case 'open':   $('#file').click(); break;
+    case 'save':   download(`${S.well.name || 'well'}.json`, JSON.stringify(S, null, 2), 'application/json'); break;
+    case 'svg':    download(`${S.well.name || 'well'}-schematic.svg`, '<?xml version="1.0" encoding="UTF-8"?>' + $('#svg').outerHTML, 'image/svg+xml'); break;
+    case 'print':  window.print(); break;
+  }
+});
+
+$('#file').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      const o = JSON.parse(rd.result);
+      const base = blankState();
+      S = {...base, ...o,
+        well: {...base.well, ...(o.well || {})},
+        tubing: {...base.tubing, ...(o.tubing || {})},
+        casings: o.casings || [], perfs: o.perfs || [], tops: o.tops || []};
+      fillAll();
+    } catch (err) {
+      alert('ملف JSON غير صالح');
+    }
+  };
+  rd.readAsText(f);
+  e.target.value = '';
+});
+
+fillAll();
+</script>
+</body>
+</html>
